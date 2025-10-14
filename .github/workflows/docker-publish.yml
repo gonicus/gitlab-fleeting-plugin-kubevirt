@@ -1,14 +1,8 @@
-# Based on Github Action Template
-
-name: Docker
+name: 'Build and publish'
 
 on:
   push:
     tags: [ 'v*.*.*' ]
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build:
@@ -16,7 +10,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-      id-token: write
 
     steps:
       - name: Checkout repository
@@ -29,6 +22,11 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.25.x'
+      - name: Build plugin
+        run: |
+          go build ./cmd/fleeting-plugin-kubevirt
+          mkdir dist/
+          mv fleeting-plugin-kubevirt dist/fleeting-plugin-kubevirt-linux-amd64
       - name: Install fleeting-artifact tool
         run: |
           go install gitlab.com/gitlab-org/fleeting/fleeting-artifact/cmd/fleeting-artifact@latest
@@ -37,3 +35,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo -n "$GITHUB_TOKEN" | ~/go/bin/fleeting-artifact login -u ${{ github.actor }} --password-stdin ghcr.io
+      - name: Push into registry
+        run: |
+          ~/go/bin/fleeting-artifact release ghcr.io/${{ github.repository }}:{{ github.ref }}
