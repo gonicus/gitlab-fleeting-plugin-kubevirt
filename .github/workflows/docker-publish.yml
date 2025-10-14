@@ -37,4 +37,4 @@ jobs:
           echo -n "$GITHUB_TOKEN" | ~/go/bin/fleeting-artifact login --username ${{ github.actor }} --password-stdin ghcr.io
       - name: Push into registry
         run: |
-          ~/go/bin/fleeting-artifact release ghcr.io/${{ github.repository }}:{{ github.ref }}
+          ~/go/bin/fleeting-artifact release ghcr.io/${{ github.repository }}:${{ github.ref }}
