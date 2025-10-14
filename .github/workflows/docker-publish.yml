@@ -25,8 +25,8 @@ jobs:
       - name: Build plugin
         run: |
           go build ./cmd/fleeting-plugin-kubevirt
-          mkdir dist/
-          mv fleeting-plugin-kubevirt dist/fleeting-plugin-kubevirt-linux-amd64
+          mkdir -p dist/linux/amd64
+          mv fleeting-plugin-kubevirt dist/linux/amd64/plugin
       - name: Install fleeting-artifact tool
         run: |
           go install gitlab.com/gitlab-org/fleeting/fleeting-artifact/cmd/fleeting-artifact@latest
