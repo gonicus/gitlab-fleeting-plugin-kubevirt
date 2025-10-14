@@ -33,4 +33,7 @@ jobs:
         run: |
           go install gitlab.com/gitlab-org/fleeting/fleeting-artifact/cmd/fleeting-artifact@latest
       - name: Log into registry
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | ~/go/bin/fleeting-artifact login -u ${{ github.actor }} --password-stdin ghcr.io
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo -n "$GITHUB_TOKEN" | ~/go/bin/fleeting-artifact login -u ${{ github.actor }} --password-stdin ghcr.io
