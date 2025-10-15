@@ -20,6 +20,8 @@ var _ provider.InstanceGroup = (*InstanceGroup)(nil)
 
 type InstanceGroup struct {
 	Kubeconfig             string `json:"kubeconfig"`
+	VmLabelSelectorKey     string `json:"vmLabelKey"`
+	VmLabelSelectorValue   string `json:"vmLabelValue"`
 	VmNamespace            string `json:"vmNamespace"`
 	VmNamePrefix           string `json:"vmNamePrefix"`
 	VmRAM                  string `json:"vmRAM"`
@@ -49,6 +51,18 @@ func (g *InstanceGroup) Init(ctx context.Context, logger hclog.Logger, settings 
 	rawConfig, err := clientConfig.MergedRawConfig()
 	if err != nil {
 		return provider.ProviderInfo{}, fmt.Errorf("failed merging raw config: %w", err)
+	}
+
+	if g.VmLabelSelectorKey == "" ||
+		g.VmLabelSelectorValue == "" ||
+		g.VmNamespace == "" ||
+		g.VmNamePrefix == "" ||
+		g.VmRAM == "" ||
+		g.VmCPUCores == "" ||
+		g.VmCloudInitUserData == "" ||
+		g.VmRunnerImage == "" ||
+		g.VmReadinessProbeScript == "" {
+		return provider.ProviderInfo{}, fmt.Errorf("missing required parameter")
 	}
 
 	g.settings = settings
@@ -135,7 +149,7 @@ func (g *InstanceGroup) Increase(ctx context.Context, delta int) (int, error) {
 			ObjectMeta: k8smetav1.ObjectMeta{
 				GenerateName: g.VmNamePrefix,
 				Labels: map[string]string{
-					"type": "gitlabfleet",
+					g.VmLabelSelectorKey: g.VmLabelSelectorValue,
 				},
 			},
 			Spec: v1.VirtualMachineSpec{
@@ -143,7 +157,7 @@ func (g *InstanceGroup) Increase(ctx context.Context, delta int) (int, error) {
 				Template: &v1.VirtualMachineInstanceTemplateSpec{
 					ObjectMeta: k8smetav1.ObjectMeta{
 						Labels: map[string]string{
-							"type": "gitlabfleet",
+							g.VmLabelSelectorKey: g.VmLabelSelectorValue,
 						},
 					},
 					Spec: v1.VirtualMachineInstanceSpec{
@@ -211,7 +225,10 @@ func (g *InstanceGroup) Increase(ctx context.Context, delta int) (int, error) {
 // Update implements provider.InstanceGroup
 func (g *InstanceGroup) Update(ctx context.Context, update func(instance string, state provider.State)) error {
 
-	vms, err := g.client.VirtualMachine(g.VmNamespace).List(ctx, k8smetav1.ListOptions{LabelSelector: "type=gitlabfleet"})
+	vms, err := g.client.VirtualMachine(g.VmNamespace).List(
+		ctx,
+		k8smetav1.ListOptions{LabelSelector: fmt.Sprintf("%s=%s", g.VmLabelSelectorKey, g.VmLabelSelectorValue)},
+	)
 	if err != nil {
 		return fmt.Errorf("failed listing VirtualMachines: %w", err)
 	}
@@ -263,7 +280,11 @@ func (g *InstanceGroup) Update(ctx context.Context, update func(instance string,
 func (g *InstanceGroup) Shutdown(ctx context.Context) error {
 	g.log.Info("deleting instances...")
 
-	err := g.client.VirtualMachine(g.VmNamespace).DeleteCollection(ctx, k8smetav1.DeleteOptions{}, k8smetav1.ListOptions{LabelSelector: "type=gitlabfleet"})
+	err := g.client.VirtualMachine(g.VmNamespace).DeleteCollection(
+		ctx,
+		k8smetav1.DeleteOptions{},
+		k8smetav1.ListOptions{LabelSelector: fmt.Sprintf("%s=%s", g.VmLabelSelectorKey, g.VmLabelSelectorValue)},
+	)
 	if err != nil {
 		return fmt.Errorf("could not delete vm's: %w", err)
 	}
