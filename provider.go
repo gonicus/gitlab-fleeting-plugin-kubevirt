@@ -11,6 +11,7 @@ import (
 	k8scorev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	v1 "kubevirt.io/api/core/v1"
 	"kubevirt.io/client-go/kubecli"
@@ -19,6 +20,7 @@ import (
 var _ provider.InstanceGroup = (*InstanceGroup)(nil)
 
 type InstanceGroup struct {
+	UseInClusterConfig     bool   `json:"useInClusterConfig"`
 	Kubeconfig             string `json:"kubeconfig"`
 	VmLabelSelectorKey     string `json:"vmLabelKey"`
 	VmLabelSelectorValue   string `json:"vmLabelValue"`
@@ -39,18 +41,30 @@ type InstanceGroup struct {
 
 // Init implements provider.InstanceGroup
 func (g *InstanceGroup) Init(ctx context.Context, logger hclog.Logger, settings provider.Settings) (provider.ProviderInfo, error) {
-	clientConfig, err := clientcmd.NewClientConfigFromBytes([]byte(g.Kubeconfig))
-	if err != nil {
-		return provider.ProviderInfo{}, fmt.Errorf("failed parsing kubeconfig: %w", err)
-	}
-	g.client, err = kubecli.GetKubevirtClientFromClientConfig(clientConfig)
-	if err != nil {
-		return provider.ProviderInfo{}, fmt.Errorf("failed creating kubevirt client: %w", err)
-	}
-
-	rawConfig, err := clientConfig.MergedRawConfig()
-	if err != nil {
-		return provider.ProviderInfo{}, fmt.Errorf("failed merging raw config: %w", err)
+	var contextName string
+	if g.UseInClusterConfig {
+		restConfig, err := rest.InClusterConfig()
+		if err != nil {
+			return provider.ProviderInfo{}, fmt.Errorf("failed getting in-cluster config: %w", err)
+		}
+		g.client, err = kubecli.GetKubevirtClientFromRESTConfig(restConfig)
+		if err != nil {
+			return provider.ProviderInfo{}, fmt.Errorf("failed creating kubevirt client: %w", err)
+		}
+	} else {
+		clientConfig, err := clientcmd.NewClientConfigFromBytes([]byte(g.Kubeconfig))
+		if err != nil {
+			return provider.ProviderInfo{}, fmt.Errorf("failed parsing kubeconfig: %w", err)
+		}
+		g.client, err = kubecli.GetKubevirtClientFromClientConfig(clientConfig)
+		if err != nil {
+			return provider.ProviderInfo{}, fmt.Errorf("failed creating kubevirt client: %w", err)
+		}
+		rawConfig, err := clientConfig.MergedRawConfig()
+		if err != nil {
+			return provider.ProviderInfo{}, fmt.Errorf("failed merging raw config: %w", err)
+		}
+		contextName = rawConfig.CurrentContext
 	}
 
 	if g.VmLabelSelectorKey == "" ||
@@ -69,7 +83,7 @@ func (g *InstanceGroup) Init(ctx context.Context, logger hclog.Logger, settings 
 	g.log = logger
 
 	return provider.ProviderInfo{
-		ID:        path.Join("kubevirt", rawConfig.CurrentContext, g.VmNamespace),
+		ID:        path.Join("kubevirt", contextName, g.VmNamespace),
 		MaxSize:   1000,
 		Version:   Version.String(),
 		BuildInfo: Version.BuildInfo(),
