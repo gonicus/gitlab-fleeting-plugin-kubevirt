@@ -19,14 +19,14 @@ import (
 var _ provider.InstanceGroup = (*InstanceGroup)(nil)
 
 type InstanceGroup struct {
-	Kubeconfig               string `json:"kubeconfig"`
-	Namespace                string `json:"namespace"`
-	VirtualMachineNamePrefix string `json:"virtualMachineNamePrefix"`
-	VirtualMachineRAM        string `json:"virtualMachineRAM"`
-	VirtualMachineCPUCores   string `json:"virtualMachineCPUCores"`
-	CloudInitUserData        string `json:"cloudInitUserData"`
-	RunnerImage              string `json:"runnerImage"`
-	ReadinessProbeScript     string `json:"readinessProbeScript"`
+	Kubeconfig             string `json:"kubeconfig"`
+	VmNamespace            string `json:"vmNamespace"`
+	VmNamePrefix           string `json:"vmNamePrefix"`
+	VmRAM                  string `json:"vmRAM"`
+	VmCPUCores             string `json:"vmCPUCores"`
+	VmCloudInitUserData    string `json:"vmCloudInitUserData"`
+	VmRunnerImage          string `json:"vmRunnerImage"`
+	VmReadinessProbeScript string `json:"vmReadinessProbeScript"`
 
 	client kubecli.KubevirtClient
 
@@ -55,7 +55,7 @@ func (g *InstanceGroup) Init(ctx context.Context, logger hclog.Logger, settings 
 	g.log = logger
 
 	return provider.ProviderInfo{
-		ID:        path.Join("kubevirt", rawConfig.CurrentContext, g.Namespace),
+		ID:        path.Join("kubevirt", rawConfig.CurrentContext, g.VmNamespace),
 		MaxSize:   1000,
 		Version:   Version.String(),
 		BuildInfo: Version.BuildInfo(),
@@ -85,7 +85,7 @@ func (g *InstanceGroup) ConnectInfo(ctx context.Context, id string) (provider.Co
 		return provider.ConnectInfo{}, fmt.Errorf("must set use_static_credentials for SSH key support")
 	}
 
-	vmi, err := g.client.VirtualMachineInstance(g.Namespace).Get(ctx, id, k8smetav1.GetOptions{})
+	vmi, err := g.client.VirtualMachineInstance(g.VmNamespace).Get(ctx, id, k8smetav1.GetOptions{})
 	if err != nil {
 		return provider.ConnectInfo{}, fmt.Errorf("failed getting vm instance: %w", err)
 	}
@@ -109,7 +109,7 @@ func (g *InstanceGroup) Decrease(ctx context.Context, vms []string) ([]string, e
 	vmsDeleted := []string{}
 	for _, vm := range vms {
 		g.log.Info("deleting instance", "vm", vm)
-		err := g.client.VirtualMachine(g.Namespace).Delete(ctx, vm, k8smetav1.DeleteOptions{})
+		err := g.client.VirtualMachine(g.VmNamespace).Delete(ctx, vm, k8smetav1.DeleteOptions{})
 		if err != nil {
 			return vmsDeleted, fmt.Errorf("failed deleting instance %s: %w", vm, err)
 		}
@@ -121,19 +121,19 @@ func (g *InstanceGroup) Decrease(ctx context.Context, vms []string) ([]string, e
 // Increase implements provider.InstanceGroup
 func (g *InstanceGroup) Increase(ctx context.Context, delta int) (int, error) {
 	for i := range delta {
-		memory, err := resource.ParseQuantity(g.VirtualMachineRAM)
+		memory, err := resource.ParseQuantity(g.VmRAM)
 		if err != nil {
-			return i, fmt.Errorf("could not parse RAM quantity '%s': %w", g.VirtualMachineRAM, err)
+			return i, fmt.Errorf("could not parse RAM quantity '%s': %w", g.VmRAM, err)
 		}
-		cores, err := strconv.ParseUint(g.VirtualMachineCPUCores, 10, 0)
+		cores, err := strconv.ParseUint(g.VmCPUCores, 10, 0)
 		if err != nil {
-			return i, fmt.Errorf("could not parse CPU core number '%s': %w", g.VirtualMachineCPUCores, err)
+			return i, fmt.Errorf("could not parse CPU core number '%s': %w", g.VmCPUCores, err)
 		}
 
 		strategy := v1.RunStrategyAlways
 		newVM := v1.VirtualMachine{
 			ObjectMeta: k8smetav1.ObjectMeta{
-				GenerateName: g.VirtualMachineNamePrefix,
+				GenerateName: g.VmNamePrefix,
 				Labels: map[string]string{
 					"type": "gitlabfleet",
 				},
@@ -150,7 +150,7 @@ func (g *InstanceGroup) Increase(ctx context.Context, delta int) (int, error) {
 						ReadinessProbe: &v1.Probe{
 							Handler: v1.Handler{
 								Exec: &k8scorev1.ExecAction{
-									Command: []string{"sh", "-c", g.ReadinessProbeScript},
+									Command: []string{"sh", "-c", g.VmReadinessProbeScript},
 								},
 							},
 						},
@@ -180,7 +180,7 @@ func (g *InstanceGroup) Increase(ctx context.Context, delta int) (int, error) {
 								Name: "containerdisk",
 								VolumeSource: v1.VolumeSource{
 									ContainerDisk: &v1.ContainerDiskSource{
-										Image: g.RunnerImage,
+										Image: g.VmRunnerImage,
 									},
 								},
 							},
@@ -188,7 +188,7 @@ func (g *InstanceGroup) Increase(ctx context.Context, delta int) (int, error) {
 								Name: "cloudinitdisk",
 								VolumeSource: v1.VolumeSource{
 									CloudInitNoCloud: &v1.CloudInitNoCloudSource{
-										UserData: g.CloudInitUserData,
+										UserData: g.VmCloudInitUserData,
 									},
 								},
 							},
@@ -198,7 +198,7 @@ func (g *InstanceGroup) Increase(ctx context.Context, delta int) (int, error) {
 			},
 		}
 
-		resultVM, err := g.client.VirtualMachine(g.Namespace).Create(ctx, &newVM, k8smetav1.CreateOptions{})
+		resultVM, err := g.client.VirtualMachine(g.VmNamespace).Create(ctx, &newVM, k8smetav1.CreateOptions{})
 		if err != nil {
 			return i, fmt.Errorf("could not create vm: %w", err)
 		}
@@ -211,7 +211,7 @@ func (g *InstanceGroup) Increase(ctx context.Context, delta int) (int, error) {
 // Update implements provider.InstanceGroup
 func (g *InstanceGroup) Update(ctx context.Context, update func(instance string, state provider.State)) error {
 
-	vms, err := g.client.VirtualMachine(g.Namespace).List(ctx, k8smetav1.ListOptions{LabelSelector: "type=gitlabfleet"})
+	vms, err := g.client.VirtualMachine(g.VmNamespace).List(ctx, k8smetav1.ListOptions{LabelSelector: "type=gitlabfleet"})
 	if err != nil {
 		return fmt.Errorf("failed listing VirtualMachines: %w", err)
 	}
@@ -263,7 +263,7 @@ func (g *InstanceGroup) Update(ctx context.Context, update func(instance string,
 func (g *InstanceGroup) Shutdown(ctx context.Context) error {
 	g.log.Info("deleting instances...")
 
-	err := g.client.VirtualMachine(g.Namespace).DeleteCollection(ctx, k8smetav1.DeleteOptions{}, k8smetav1.ListOptions{LabelSelector: "type=gitlabfleet"})
+	err := g.client.VirtualMachine(g.VmNamespace).DeleteCollection(ctx, k8smetav1.DeleteOptions{}, k8smetav1.ListOptions{LabelSelector: "type=gitlabfleet"})
 	if err != nil {
 		return fmt.Errorf("could not delete vm's: %w", err)
 	}
