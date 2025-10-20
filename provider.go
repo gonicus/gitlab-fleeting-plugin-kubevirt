@@ -51,6 +51,7 @@ func (g *InstanceGroup) Init(ctx context.Context, logger hclog.Logger, settings 
 		if err != nil {
 			return provider.ProviderInfo{}, fmt.Errorf("failed creating kubevirt client: %w", err)
 		}
+		contextName = "in-cluster"
 	} else {
 		clientConfig, err := clientcmd.NewClientConfigFromBytes([]byte(g.Kubeconfig))
 		if err != nil {
