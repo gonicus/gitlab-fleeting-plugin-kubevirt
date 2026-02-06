@@ -24,7 +24,7 @@ jobs:
           go-version: '1.25.x'
       - name: Build plugin
         run: |
-          go build -ldflags="-extldflags=-static" ./cmd/fleeting-plugin-kubevirt
+          CGO_ENABLED=0 go build -ldflags="-extldflags=-static" ./cmd/fleeting-plugin-kubevirt
           mkdir -p dist/linux/amd64
           mv fleeting-plugin-kubevirt dist/linux/amd64/plugin
       - name: Install fleeting-artifact tool
