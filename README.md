@@ -42,7 +42,7 @@ Plugin implementing [Gitlab Fleeting](https://docs.gitlab.com/runner/fleet_scali
             image = "alpine:latest"
 
           [runners.autoscaler]
-            plugin = "ghcr.io/gonicus/gitlab-fleeting-plugin-kubevirt:0.0.12" # Or build your own
+            plugin = "ghcr.io/gonicus/gitlab-fleeting-plugin-kubevirt:0.0.13" # Or build your own
             capacity_per_instance = 1
             max_use_count = 1
             max_instances = 9
