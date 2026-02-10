@@ -262,13 +262,13 @@ func (g *InstanceGroup) Update(ctx context.Context, update func(instance string,
 
 		switch vm.Status.PrintableStatus {
 		case v1.VirtualMachineStatusDataVolumeError,
+			v1.VirtualMachineStatusCrashLoopBackOff,
 			v1.VirtualMachineStatusErrImagePull,
 			v1.VirtualMachineStatusImagePullBackOff,
 			v1.VirtualMachineStatusPvcNotFound,
 			v1.VirtualMachineStatusUnknown:
 			state = provider.StateTimeout
 		case v1.VirtualMachineStatusMigrating,
-			v1.VirtualMachineStatusCrashLoopBackOff,
 			v1.VirtualMachineStatusPaused,
 			v1.VirtualMachineStatusProvisioning,
 			v1.VirtualMachineStatusStarting,
