@@ -30,6 +30,7 @@ type InstanceGroup struct {
 	VmCPUCores             string `json:"vmCPUCores"`
 	VmCloudInitUserData    string `json:"vmCloudInitUserData"`
 	VmRunnerImage          string `json:"vmRunnerImage"`
+	VmDataDiskCapacity     string `json:"vmDataDiskCapacity"`
 	VmReadinessProbeScript string `json:"vmReadinessProbeScript"`
 
 	client kubecli.KubevirtClient
@@ -76,6 +77,7 @@ func (g *InstanceGroup) Init(ctx context.Context, logger hclog.Logger, settings 
 		g.VmCPUCores == "" ||
 		g.VmCloudInitUserData == "" ||
 		g.VmRunnerImage == "" ||
+		g.VmDataDiskCapacity == "" ||
 		g.VmReadinessProbeScript == "" {
 		return provider.ProviderInfo{}, fmt.Errorf("missing required parameter")
 	}
@@ -154,6 +156,10 @@ func (g *InstanceGroup) Increase(ctx context.Context, delta int) (int, error) {
 		if err != nil {
 			return i, fmt.Errorf("could not parse RAM quantity '%s': %w", g.VmRAM, err)
 		}
+		dataDiskCapacity, err := resource.ParseQuantity(g.VmDataDiskCapacity)
+		if err != nil {
+			return i, fmt.Errorf("could not parse data disk quantity '%s': %w", g.VmDataDiskCapacity, err)
+		}
 		cores, err := strconv.ParseUint(g.VmCPUCores, 10, 0)
 		if err != nil {
 			return i, fmt.Errorf("could not parse CPU core number '%s': %w", g.VmCPUCores, err)
@@ -201,6 +207,11 @@ func (g *InstanceGroup) Increase(ctx context.Context, delta int) (int, error) {
 										Name:       "cloudinitdisk",
 										DiskDevice: v1.DiskDevice{},
 									},
+									{
+										Name:       "datadisk",
+										DiskDevice: v1.DiskDevice{},
+										Serial:     "data",
+									},
 								},
 							},
 						},
@@ -218,6 +229,14 @@ func (g *InstanceGroup) Increase(ctx context.Context, delta int) (int, error) {
 								VolumeSource: v1.VolumeSource{
 									CloudInitNoCloud: &v1.CloudInitNoCloudSource{
 										UserData: g.VmCloudInitUserData,
+									},
+								},
+							},
+							{
+								Name: "datadisk",
+								VolumeSource: v1.VolumeSource{
+									EmptyDisk: &v1.EmptyDiskSource{
+										Capacity: dataDiskCapacity,
 									},
 								},
 							},
