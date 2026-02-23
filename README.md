@@ -42,7 +42,7 @@ Plugin implementing [Gitlab Fleeting](https://docs.gitlab.com/runner/fleet_scali
             image = "alpine:latest"
 
           [runners.autoscaler]
-            plugin = "ghcr.io/gonicus/gitlab-fleeting-plugin-kubevirt:0.0.13" # Or build your own
+            plugin = "ghcr.io/gonicus/gitlab-fleeting-plugin-kubevirt:0.0.14" # Or build your own
             capacity_per_instance = 1
             max_use_count = 1
             max_instances = 9
@@ -58,12 +58,15 @@ Plugin implementing [Gitlab Fleeting](https://docs.gitlab.com/runner/fleet_scali
             vmReadinessProbeScript = "cat /tmp/healthy.txt"
             vmRAM = "4Gi"
             vmCPUCores = "4"
+            vmDataDiskCapacity = "20Gi"
             vmRunnerImage = "quay.io/containerdisks/debian:13" # Or - preferably - build your own with all required tooling baked in
             vmCloudInitUserData = '''
         #cloud-config
         ssh_pwauth: False
         ssh_authorized_keys:
           - 'ssh-ed25519 ...' # Put in content of ssh_id_fleeting.pub
+        bootcmd:
+          - D=/dev/disk/by-id/ata-QEMU_HARDDISK_data sh -c 'mkfs.ext4 $D && mkdir /var/lib/docker && mount $D /var/lib/docker'
         runcmd:
           - apt update && apt -y install curl git qemu-guest-agent ca-certificates docker.io
           - |
